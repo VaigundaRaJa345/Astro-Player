@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run build --prefix client",
+  "outputDirectory": "client/dist",
+  "cleanUrls": true,
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
