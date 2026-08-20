@@ -1,0 +1,17 @@
+{
+  "name": "astro-player",
+  "version": "1.0.0",
+  "description": "Your Sound. Your Universe. A Premium Music Streaming Application.",
+  "main": "server/src/index.js",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix client && npm install --prefix server",
+    "server": "npm start --prefix server",
+    "client": "npm run dev --prefix client",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build:client": "npm run build --prefix client",
+    "start": "node server/src/index.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
