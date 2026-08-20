@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = `http://${window.location.hostname}:5000/api`;
 
 // Helper to get auth headers
 function getHeaders() {
@@ -98,7 +98,7 @@ async function request(endpoint, options = {}) {
   };
 
   if (isOffline()) {
-    throw new Error('NETWORK_OFFLINE');
+    return handleOfflineFallback(endpoint, options);
   }
 
   try {
@@ -109,11 +109,8 @@ async function request(endpoint, options = {}) {
     }
     return await res.json();
   } catch (err) {
-    if (err.message === 'Failed to fetch' || err.message === 'NETWORK_OFFLINE') {
-      console.warn(`Server unreachable at ${url}, using offline local storage fallback.`);
-      return handleOfflineFallback(endpoint, options);
-    }
-    throw err;
+    console.warn(`API request to ${url} failed (${err.message}). Using offline local storage fallback.`);
+    return handleOfflineFallback(endpoint, options);
   }
 }
 

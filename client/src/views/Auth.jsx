@@ -6,8 +6,8 @@ export default function Auth() {
   const { login, register } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('astro@player.com');
+  const [password, setPassword] = useState('astro');
   const [authError, setAuthError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -173,6 +173,11 @@ export default function Auth() {
               isLogin ? 'Sign In' : 'Create Account'
             )}
           </button>
+          {isLogin && (
+            <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '12px', opacity: 0.85 }}>
+              Preset login auto-filled. Click <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>Sign In</span> or Guest Login to enter.
+            </div>
+          )}
         </form>
 
         <div style={{ display: 'flex', alignItems: 'center', width: '100%', margin: '20px 0' }}>
