@@ -45,22 +45,32 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
   // Fetch data
   useEffect(() => {
     async function loadData() {
+      // 1. Load public featured section
       try {
         const featuredRes = await api.getFeatured();
         setFeaturedSongs(featuredRes.songs || []);
-        
-        const historyRes = await api.getHistory();
-        setHistory(historyRes.history || []);
-
-        // Load Tamil sections asynchronously
-        api.searchSongs('Trending Tamil Songs').then(res => setTrendingTamil(res.songs?.slice(0, 8) || []));
-        api.searchSongs('Tamil Melody Hit Songs').then(res => setTamilMelody(res.songs?.slice(0, 8) || []));
-        api.searchSongs('Tamil Mass BGM songs').then(res => setTamilMass(res.songs?.slice(0, 8) || []));
-        api.searchSongs('Classic Tamil Hit Songs').then(res => setTamilClassics(res.songs?.slice(0, 8) || []));
-
       } catch (err) {
-        console.error('Failed to load home dashboard data', err);
+        console.error('Failed to load featured songs:', err);
       }
+      
+      // 2. Load private history (only if authenticated)
+      const token = localStorage.getItem('astro_token');
+      if (token) {
+        try {
+          const historyRes = await api.getHistory();
+          setHistory(historyRes.history || []);
+        } catch (err) {
+          console.error('Failed to load private user history:', err);
+        }
+      } else {
+        setHistory([]);
+      }
+
+      // 3. Load Tamil sections asynchronously (public searches)
+      api.searchSongs('Trending Tamil Songs').then(res => setTrendingTamil(res.songs?.slice(0, 8) || [])).catch(e => console.warn('Trending search failed:', e));
+      api.searchSongs('Tamil Melody Hit Songs').then(res => setTamilMelody(res.songs?.slice(0, 8) || [])).catch(e => console.warn('Melody search failed:', e));
+      api.searchSongs('Tamil Mass BGM songs').then(res => setTamilMass(res.songs?.slice(0, 8) || [])).catch(e => console.warn('Mass search failed:', e));
+      api.searchSongs('Classic Tamil Hit Songs').then(res => setTamilClassics(res.songs?.slice(0, 8) || [])).catch(e => console.warn('Classics search failed:', e));
     }
     loadData();
   }, [currentTrack]);

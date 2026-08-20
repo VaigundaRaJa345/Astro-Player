@@ -105,12 +105,35 @@ async function request(endpoint, options = {}) {
     const res = await fetch(url, config);
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || `HTTP error ${res.status}`);
+      const errorMsg = errData.error || `HTTP error ${res.status}`;
+      
+      // Handle auth token expiration
+      if (res.status === 401) {
+        console.warn('Authentication token expired or invalid. Clearing token...');
+        localStorage.removeItem('astro_token');
+        throw new Error('Invalid or expired token');
+      }
+      
+      const error = new Error(errorMsg);
+      error.status = res.status;
+      error.code = errData.code;
+      throw error;
     }
     return await res.json();
   } catch (err) {
-    console.warn(`API request to ${url} failed (${err.message}). Using offline local storage fallback.`);
-    return handleOfflineFallback(endpoint, options);
+    // Only fall back to local offline mock storage if it's a genuine network connectivity error
+    const isNetworkError = 
+      !navigator.onLine || 
+      err.name === 'TypeError' || 
+      err.message.includes('fetch') || 
+      err.message.includes('NetworkError');
+
+    if (isNetworkError && !err.status) {
+      console.warn(`API request to ${url} failed due to connection issues. Using offline fallback.`);
+      return handleOfflineFallback(endpoint, options);
+    }
+    
+    throw err;
   }
 }
 

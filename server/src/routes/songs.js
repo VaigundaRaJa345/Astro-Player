@@ -25,9 +25,9 @@ import { authenticateToken } from '../middleware/auth.js';
 const router = express.Router();
 
 // Search, Seeded tracks & YouTube API Caching
-router.get('/search', authenticateToken, searchSongs);
-router.get('/suggestions', authenticateToken, getSearchSuggestions);
-router.get('/featured', authenticateToken, getFeatured);
+router.get('/search', searchSongs);
+router.get('/suggestions', getSearchSuggestions);
+router.get('/featured', getFeatured);
 router.post('/sync', authenticateToken, syncSong);
 
 // Cache Management & API Metrics

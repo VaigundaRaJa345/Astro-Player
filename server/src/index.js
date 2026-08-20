@@ -47,9 +47,28 @@ app.use((req, res, next) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    environment: process.env.NODE_ENV || 'development',
-    youtubeConfigured: !!process.env.YOUTUBE_API_KEY
+    environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// YouTube connectivity check route
+app.get('/api/youtube/health', async (req, res) => {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) {
+    return res.json({ configured: false, reachable: false });
+  }
+  try {
+    const testUrl = `https://www.googleapis.com/youtube/v3/search?part=id&q=test&maxResults=1&key=${apiKey}`;
+    const testRes = await fetch(testUrl);
+    if (testRes.ok) {
+      res.json({ configured: true, reachable: true });
+    } else {
+      const errData = await testRes.json().catch(() => ({}));
+      res.json({ configured: true, reachable: false, reason: errData.error?.message || 'API request failed' });
+    }
+  } catch (err) {
+    res.json({ configured: true, reachable: false, reason: err.message || 'Network error' });
+  }
 });
 
 // Mount routes
