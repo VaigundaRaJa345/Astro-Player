@@ -2,19 +2,21 @@ import React, { useState } from 'react';
 import { Home, Compass, Search, Library, Heart, Download, Settings, User, PlusCircle, LogOut, Music } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import { getTranslation } from '../services/translations';
 
 export default function Sidebar({ currentView, setView, setViewParams, userPlaylists, refreshPlaylists }) {
-  const { user, logout } = useAuth();
+  const { user, logout, language } = useAuth();
+  const t = (key) => getTranslation(language, key);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [showModal, setShowModal] = useState(false);
 
   const navItems = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'discover', label: 'Discover', icon: Compass },
-    { id: 'search', label: 'Search', icon: Search },
-    { id: 'library', label: 'Library', icon: Library },
-    { id: 'liked', label: 'Liked Songs', icon: Heart },
-    { id: 'downloads', label: 'Downloads', icon: Download },
+    { id: 'home', label: t('home'), icon: Home },
+    { id: 'discover', label: t('discover'), icon: Compass },
+    { id: 'search', label: t('search'), icon: Search },
+    { id: 'library', label: t('library'), icon: Library },
+    { id: 'liked', label: t('likedSongs'), icon: Heart },
+    { id: 'downloads', label: t('downloads'), icon: Download },
   ];
 
   const handleCreatePlaylist = async (e) => {
@@ -105,12 +107,12 @@ export default function Sidebar({ currentView, setView, setViewParams, userPlayl
       {/* Playlists Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 8px 8px' }}>
         <span style={{ fontSize: '12px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
-          Playlists
+          {t('playlists')}
         </span>
         <button 
           onClick={() => setShowModal(true)}
           style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-          title="Create Playlist"
+          title={t('createPlaylist')}
         >
           <PlusCircle size={16} />
         </button>
@@ -197,7 +199,7 @@ export default function Sidebar({ currentView, setView, setViewParams, userPlayl
           }}
         >
           <Settings size={18} />
-          Settings
+          {t('settings')}
         </button>
 
         <button
@@ -219,7 +221,7 @@ export default function Sidebar({ currentView, setView, setViewParams, userPlayl
           }}
         >
           <LogOut size={18} />
-          Log Out
+          {t('logout')}
         </button>
       </div>
 

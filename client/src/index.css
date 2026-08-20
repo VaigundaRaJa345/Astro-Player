@@ -285,3 +285,8 @@ button, input {
   opacity: 0.001;
   pointer-events: none;
 }
+
+.tamil-font {
+  font-family: 'Noto Sans Tamil', 'Manrope', sans-serif !important;
+  line-height: 1.6 !important;
+}

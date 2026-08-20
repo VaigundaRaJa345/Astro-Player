@@ -6,12 +6,26 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('astro_token'));
+  const [language, setLanguage] = useState(localStorage.getItem('astro_language') || 'en');
   const [settings, setSettings] = useState({
     playback_crossfade: 0,
     wifi_only: 0,
     download_quality: 'High',
     theme_color: 'blue'
   });
+
+  useEffect(() => {
+    if (language === 'ta') {
+      document.body.classList.add('tamil-font');
+    } else {
+      document.body.classList.remove('tamil-font');
+    }
+  }, [language]);
+
+  const changeLanguage = (lang) => {
+    setLanguage(lang);
+    localStorage.setItem('astro_language', lang);
+  };
   const [stats, setStats] = useState({
     likedSongs: 0,
     playlists: 0,
@@ -117,6 +131,8 @@ export function AuthProvider({ children }) {
     settings,
     stats,
     loading,
+    language,
+    changeLanguage,
     login,
     register,
     logout,

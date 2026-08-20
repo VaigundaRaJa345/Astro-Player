@@ -1,5 +1,19 @@
 import { query } from '../config/db.js';
 
+// Server-side in-memory search cache to preserve API quota
+const searchCache = new Map();
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours TTL
+
+// Periodically clean cache to prevent memory bloat
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of searchCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL_MS) {
+      searchCache.delete(key);
+    }
+  }
+}, 60 * 60 * 1000); // clean every hour
+
 // Parse ISO 8601 duration format (e.g. PT3M45S) into seconds
 function parseISO8601Duration(duration) {
   const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -10,11 +24,105 @@ function parseISO8601Duration(duration) {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-// Search YouTube and format as song schema
+// Advanced YouTube title cleaner for Tamil songs
+function cleanTitleDetails(rawTitle, channelTitle) {
+  let cleanTitle = rawTitle
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\(Official (Video|Audio|Music Video|Lyrical|Lyric Video|Song)\)/gi, '')
+    .replace(/\[Official (Video|Audio|Music Video|Lyrical|Lyric Video|Song)\]/gi, '')
+    .replace(/\bVideo Song\b/gi, '')
+    .replace(/\bLyrical Video\b/gi, '')
+    .replace(/\bLyric Video\b/gi, '')
+    .replace(/\bLyrical Song\b/gi, '')
+    .replace(/\(Video\)/gi, '')
+    .replace(/\[Video\]/gi, '')
+    .replace(/\(Lyrical\)/gi, '')
+    .replace(/\[Lyrical\]/gi, '')
+    .replace(/\(Audio\)/gi, '')
+    .replace(/\[Audio\]/gi, '')
+    .replace(/\b(hd|4k|1080p|full hd)\b/gi, '')
+    .trim();
+
+  let titlePart = cleanTitle;
+  let moviePart = 'Tamil Single';
+  let artistPart = channelTitle.replace(/ - Topic$/i, '');
+
+  // 1. Try to split by Pipe characters
+  const partsByBar = cleanTitle.split('|').map(p => p.trim());
+  if (partsByBar.length > 1) {
+    const firstPart = partsByBar[0];
+    const secondPart = partsByBar[1];
+
+    const hyphenParts = firstPart.split('-').map(p => p.trim());
+    if (hyphenParts.length > 1) {
+      titlePart = hyphenParts[0];
+      moviePart = hyphenParts[1];
+    } else {
+      titlePart = firstPart;
+      moviePart = secondPart;
+    }
+  } else {
+    // 2. Try to split by hyphens
+    const partsByHyphen = cleanTitle.split('-').map(p => p.trim());
+    if (partsByHyphen.length > 1) {
+      titlePart = partsByHyphen[0];
+      moviePart = partsByHyphen[1];
+    }
+  }
+
+  // 3. Scan title and match known popular composers
+  const composers = [
+    'Anirudh Ravichander', 'Anirudh', 'A.R. Rahman', 'A. R. Rahman', 'AR Rahman', 
+    'Ilaiyaraaja', 'Yuvan Shankar Raja', 'Yuvan', 'Harris Jayaraj', 
+    'Santhosh Narayanan', 'G.V. Prakash Kumar', 'G.V. Prakash', 'Dhibu Ninan Thomas'
+  ];
+  
+  for (const c of composers) {
+    if (rawTitle.toLowerCase().includes(c.toLowerCase())) {
+      artistPart = c;
+      break;
+    }
+  }
+
+  // 4. Final sanitization
+  titlePart = titlePart.replace(/lyric(al)?/gi, '').replace(/^[-+*|\s:]+|[-+*|\s:]+$/g, '').trim();
+  moviePart = moviePart.replace(/lyric(al)?/gi, '').replace(/^[-+*|\s:]+|[-+*|\s:]+$/g, '').trim();
+
+  if (titlePart.length > 0) {
+    titlePart = titlePart.charAt(0).toUpperCase() + titlePart.slice(1);
+  }
+  if (moviePart.length > 0 && moviePart.toLowerCase() !== 'tamil single') {
+    moviePart = moviePart.charAt(0).toUpperCase() + moviePart.slice(1);
+  }
+
+  return {
+    title: titlePart || rawTitle,
+    album: moviePart || 'Tamil Single',
+    artist: artistPart || channelTitle
+  };
+}
+
+// Search YouTube and format as song schema (Optimized for Tamil query ranking & caching)
 export async function searchSongs(req, res) {
   const { q } = req.query;
   if (!q) {
     return res.status(400).json({ error: 'Search query is required' });
+  }
+
+  // 1. Check local cache
+  const cacheKey = q.trim().toLowerCase();
+  if (searchCache.has(cacheKey)) {
+    const entry = searchCache.get(cacheKey);
+    if (Date.now() - entry.timestamp < CACHE_TTL_MS) {
+      console.log(`Resolving search results from cache for: "${q}"`);
+      return res.json({ songs: entry.songs });
+    } else {
+      searchCache.delete(cacheKey);
+    }
   }
 
   const apiKey = process.env.YOUTUBE_API_KEY;
@@ -23,26 +131,55 @@ export async function searchSongs(req, res) {
   }
 
   try {
-    console.log(`Searching YouTube for: "${q}"`);
-    // 1. Query YouTube API search to find videos
-    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q + ' music')}&type=video&maxResults=20&key=${apiKey}`;
+    // 2. Normalize search queries (support Tanglish and English inputs to direct target Tamil content)
+    let normalizedQ = q.trim();
+    const hasTamilSymbols = /[\u0B80-\u0BFF]/.test(normalizedQ);
+
+    if (!hasTamilSymbols) {
+      const lowerQ = normalizedQ.toLowerCase();
+      const isAlreadyTamilTargeted = lowerQ.includes('tamil') || lowerQ.includes('kollywood');
+
+      if (!isAlreadyTamilTargeted) {
+        // scan list of popular movie music & artists
+        const moviesList = ['jailer', 'leo', 'vikram', '96', 'vaaranam aayiram', 'alaipayuthey', 'kabali', 'master', 'beast', 'varisu', 'thunivu', 'kolaveri', 'arabic kuthu', 'kaavaalaa', 'vaa vaathi', 'enjoy enjaami', 'munbe vaa', 'vaseegara', 'nenjukkul peidhidum', 'anbe en anbe', 'sillunu oru kadhal'];
+        const composersList = ['anirudh', 'rahman', 'ilaiyaraaja', 'yuvan', 'harris jayaraj', 'santhosh narayanan', 'gv prakash', 'gvp', 'dhibu ninan'];
+        
+        const matchedMovie = moviesList.find(m => lowerQ.includes(m));
+        const matchedComposer = composersList.find(c => lowerQ.includes(c));
+
+        if (matchedMovie && !lowerQ.includes('song')) {
+          normalizedQ = `${normalizedQ} tamil song`;
+        } else if (matchedComposer && !lowerQ.includes('song')) {
+          normalizedQ = `${normalizedQ} tamil songs`;
+        } else if (!lowerQ.includes('song')) {
+          normalizedQ = `${normalizedQ} tamil song`;
+        }
+      }
+    }
+
+    console.log(`Executing YouTube Search. Raw query: "${q}" | Normalized: "${normalizedQ}"`);
+
+    // 3. Query YouTube search
+    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(normalizedQ)}&type=video&maxResults=20&key=${apiKey}`;
     const searchRes = await fetch(searchUrl);
     
     if (!searchRes.ok) {
       const err = await searchRes.json();
-      console.error('YouTube API Error response:', err);
+      console.error('YouTube Search API error:', err);
       return res.status(searchRes.status).json({ error: err.error?.message || 'YouTube search service failed' });
     }
 
     const searchData = await searchRes.json();
     const items = searchData.items || [];
     if (items.length === 0) {
+      // Save empty cache to avoid repeating query
+      searchCache.set(cacheKey, { timestamp: Date.now(), songs: [] });
       return res.json({ songs: [] });
     }
 
     const videoIds = items.map(item => item.id.videoId).filter(Boolean);
 
-    // 2. Fetch video details to parse exact playback durations
+    // 4. Fetch details to get duration
     const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${videoIds.join(',')}&key=${apiKey}`;
     const detailsRes = await fetch(detailsUrl);
     
@@ -53,31 +190,63 @@ export async function searchSongs(req, res) {
     const detailsData = await detailsRes.json();
     const detailsItems = detailsData.items || [];
 
-    const songs = detailsItems.map(item => {
+    // 5. Clean metadata and calculate weight scores for ranking intelligence
+    const premiumPublishers = [
+      'sony music south', 'saregama tamil', 'think music india', 'tips tamil', 
+      'lahari music', 'muzik247', 'divo music', 'junglee music south', 
+      'aditya music', 'sun pictures', 't-series tamil', 'tseries tamil', 
+      'divomuse', 'thinkmusic', 'saregamadevtamil'
+    ];
+
+    let songs = detailsItems.map(item => {
       const durationSec = parseISO8601Duration(item.contentDetails?.duration || '');
-      // Remove noise from title and clean up artist names
       const rawTitle = item.snippet?.title || 'Unknown Title';
-      const cleanTitle = rawTitle
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/\(Official (Video|Audio|Music Video)\)/gi, '')
-        .replace(/\[Official (Video|Audio|Music Video)\]/gi, '')
-        .trim();
+      const channelTitle = item.snippet?.channelTitle || 'Unknown Channel';
+      
+      const cleanDetails = cleanTitleDetails(rawTitle, channelTitle);
+      
+      // Calculate search ranking score based on channel authority
+      let score = 0;
+      const lowerChannel = channelTitle.toLowerCase();
+      const lowerTitle = rawTitle.toLowerCase();
+
+      // Priority 1: Match premium Tamil music label channel names
+      const isPremiumLabel = premiumPublishers.some(pub => lowerChannel.includes(pub));
+      if (isPremiumLabel) score += 100;
+
+      // Priority 2: Official lyric or movie video descriptors in the title
+      if (lowerTitle.includes('official lyrical') || lowerTitle.includes('lyric video') || lowerTitle.includes('video song')) {
+        score += 50;
+      }
+
+      // Priority 3: Composer Topic channels
+      if (lowerChannel.includes('topic')) {
+        score += 30;
+      }
 
       return {
         id: `yt_${item.id}`,
-        title: cleanTitle,
-        artist: item.snippet?.channelTitle?.replace(/ - Topic$/i, '') || 'Unknown Artist',
-        album: 'YouTube Single',
-        artwork_url: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url,
+        title: cleanDetails.title,
+        artist: cleanDetails.artist,
+        album: cleanDetails.album,
+        artwork_url: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url,
         duration: durationSec || 180,
         source: 'youtube',
         source_id: item.id,
-        playback_url: '', // Played via standard YouTube player
-        release_date: item.snippet?.publishedAt?.substring(0, 4) || ''
+        playback_url: '',
+        release_date: item.snippet?.publishedAt?.substring(0, 4) || '',
+        score // temporary field for sorting
       };
     });
+
+    // 6. Sort results by our computed weight scores
+    songs.sort((a, b) => b.score - a.score);
+
+    // Remove the temporary score field
+    songs = songs.map(({ score, ...rest }) => rest);
+
+    // 7. Store in local in-memory cache
+    searchCache.set(cacheKey, { timestamp: Date.now(), songs });
 
     res.json({ songs });
   } catch (err) {

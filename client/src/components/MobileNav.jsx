@@ -1,13 +1,18 @@
 import React from 'react';
 import { Home, Compass, Search, Library, Download } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { getTranslation } from '../services/translations';
 
 export default function MobileNav({ currentView, setView, setViewParams }) {
+  const { language } = useAuth();
+  const t = (key) => getTranslation(language, key);
+
   const items = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'discover', label: 'Discover', icon: Compass },
-    { id: 'search', label: 'Search', icon: Search },
-    { id: 'library', label: 'Library', icon: Library },
-    { id: 'downloads', label: 'Downloads', icon: Download }
+    { id: 'home', label: t('home'), icon: Home },
+    { id: 'discover', label: t('discover'), icon: Compass },
+    { id: 'search', label: t('search'), icon: Search },
+    { id: 'library', label: t('library'), icon: Library },
+    { id: 'downloads', label: t('downloads'), icon: Download }
   ];
 
   return (

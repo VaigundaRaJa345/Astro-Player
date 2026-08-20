@@ -1,15 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Search as SearchIcon, X, Play, Heart, MoreVertical, Loader2, Clock, Flame } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search as SearchIcon, X, Play, Heart, Clock, Flame, Loader2 } from 'lucide-react';
 import { usePlayback } from '../context/PlaybackContext';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
+import { getTranslation } from '../services/translations';
 
-export default function Search({ setView, setViewParams, userPlaylists, refreshPlaylists }) {
+// Pre-seeded dictionary of Tamil search hints
+const knownSuggestions = [
+  'Anirudh Ravichander', 'Anirudh Tamil Songs', 'Anirudh Hit Songs', 'Anirudh Melody Songs', 'Anirudh Movie Songs',
+  'A.R. Rahman Hits', 'A.R. Rahman Tamil Songs', 'A.R. Rahman Melodies', 'Ilaiyaraaja Classic Hits', 
+  'Ilaiyaraaja Melody Songs', 'Yuvan Shankar Raja Hits', 'Yuvan Shankar Raja Melodies', 'Harris Jayaraj Hit Songs',
+  'Why This Kolaveri Di', 'Arabic Kuthu', 'Hukum', 'Hukum Tamil Song', 'Hukum Jailer', 'Kaavaalaa', 'Vaa Vaathi', 
+  'Enjoy Enjaami', 'Munbe Vaa', 'Vaseegara', 'Nenjukkul Peidhidum', 'Anbe En Anbe',
+  'Jailer Songs', 'Leo Songs', 'Vikram Songs', '96 Songs', 'Vaaranam Aayiram Songs', 'Alaipayuthey Songs', 'Sillunu Oru Kadhal'
+];
+
+export default function Search({ viewParams, setView, setViewParams, userPlaylists, refreshPlaylists }) {
   const { playTrack, likedSongIds, toggleLike } = usePlayback();
+  const { language } = useAuth();
+  const t = (key) => getTranslation(language, key);
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState('all'); // 'all' | 'songs' | 'artists' | 'playlists'
+  const [filter, setFilter] = useState('all'); // 'all' | 'songs' | 'artists' | 'playlists' | 'tamil'
   
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const inputRef = useRef(null);
+
   const [recentSearches, setRecentSearches] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('astro_recent_searches') || '[]');
@@ -18,7 +37,38 @@ export default function Search({ setView, setViewParams, userPlaylists, refreshP
     }
   });
 
-  const trendingSearches = ['Stellar Drift', 'Space Ambient', 'Nebula Chill', 'Lofi Orbit', 'Synthwave 2026'];
+  const trendingSearches = ['Hukum', 'Munbe Vaa', 'Arabic Kuthu', 'Yuvan Shankar Raja Hits', 'Anirudh Melody Songs'];
+
+  // Handle Ctrl+K shortcut focus on desktop
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        if (inputRef.current) inputRef.current.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Handle initialQuery redirect parameters on mount
+  useEffect(() => {
+    if (viewParams && viewParams.initialQuery) {
+      setQuery(viewParams.initialQuery);
+      executeSearch(viewParams.initialQuery);
+    }
+  }, [viewParams]);
+
+  // Generate suggestions while typing
+  useEffect(() => {
+    if (query.trim().length >= 2) {
+      const val = query.toLowerCase().trim();
+      const matches = knownSuggestions.filter(s => s.toLowerCase().includes(val)).slice(0, 5);
+      setSuggestions(matches);
+    } else {
+      setSuggestions([]);
+    }
+  }, [query]);
 
   // Debounced search trigger
   useEffect(() => {
@@ -30,43 +80,31 @@ export default function Search({ setView, setViewParams, userPlaylists, refreshP
 
     setLoading(true);
     const delayDebounce = setTimeout(() => {
-      executeSearch(query);
-    }, 600);
+      const targetQuery = filter === 'tamil' && !query.toLowerCase().includes('tamil') ? `${query} Tamil` : query;
+      executeSearch(targetQuery);
+    }, 450);
 
     return () => clearTimeout(delayDebounce);
-  }, [query]);
+  }, [query, filter]);
 
   async function executeSearch(searchQuery) {
+    setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/songs/search?q=${encodeURIComponent(searchQuery)}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('astro_token')}`
-        }
-      });
-      if (!res.ok) throw new Error('Search failed');
-      const data = await res.json();
-      
+      // Connect to host-safe api utility supporting local db fallbacks
+      const data = await api.searchSongs(searchQuery);
       setResults(data.songs || []);
       
-      // Save to recent searches if not already there
-      setRecentSearches(prev => {
-        const next = [searchQuery, ...prev.filter(q => q !== searchQuery)].slice(0, 5);
-        localStorage.setItem('astro_recent_searches', JSON.stringify(next));
-        return next;
-      });
+      // Save query to recent searches history list
+      if (!viewParams?.initialQuery) {
+        setRecentSearches(prev => {
+          const next = [searchQuery.replace(/ Tamil$/i, ''), ...prev.filter(q => q !== searchQuery)].slice(0, 5);
+          localStorage.setItem('astro_recent_searches', JSON.stringify(next));
+          return next;
+        });
+      }
     } catch (err) {
       console.error(err);
-      // Fallback: search local mock store/Astro Originals
-      try {
-        const feat = await api.getFeatured();
-        const filtered = feat.songs.filter(
-          s => s.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-               s.artist.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        setResults(filtered);
-      } catch (mockErr) {
-        setResults([]);
-      }
+      setResults([]);
     } finally {
       setLoading(false);
     }
@@ -74,6 +112,8 @@ export default function Search({ setView, setViewParams, userPlaylists, refreshP
 
   const handleRecentClick = (q) => {
     setQuery(q);
+    setShowSuggestions(false);
+    executeSearch(q);
   };
 
   const handleClearRecent = () => {
@@ -81,24 +121,33 @@ export default function Search({ setView, setViewParams, userPlaylists, refreshP
     setRecentSearches([]);
   };
 
-  // Filter songs based on pill selection
+  const handleSuggestionClick = (sug) => {
+    setQuery(sug);
+    setShowSuggestions(false);
+    executeSearch(sug);
+  };
+
   const filteredResults = results.filter(item => {
-    if (filter === 'all') return true;
+    if (filter === 'all' || filter === 'tamil') return true;
     if (filter === 'songs') return item.source === 'youtube' || item.source === 'astro';
-    // Mock other formats for search UI richness
-    if (filter === 'artists') return false; // Demo details
+    if (filter === 'artists') return false; // placeholder filter
     return true;
   });
 
   return (
-    <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '80px', position: 'relative' }}>
+      
       {/* Search Header Input */}
       <div style={{ position: 'relative', width: '100%' }}>
         <input
+          ref={inputRef}
+          id="search-input"
           type="text"
-          placeholder="Search songs, artists, albums, playlists"
+          placeholder={t('searchPlaceholder')}
           value={query}
           onChange={e => setQuery(e.target.value)}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
           className="input-field"
           style={{ paddingLeft: '50px', paddingRight: '48px', fontSize: '16px' }}
         />
@@ -109,17 +158,63 @@ export default function Search({ setView, setViewParams, userPlaylists, refreshP
         />
         {query && (
           <button 
-            onClick={() => setQuery('')}
+            onClick={() => { setQuery(''); setResults([]); }}
             style={{ position: 'absolute', right: '18px', top: '13px', background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
           >
             <X size={20} />
           </button>
         )}
+
+        {/* Live Auto-Suggestions Dropdown */}
+        {showSuggestions && suggestions.length > 0 && (
+          <div 
+            className="glass-panel"
+            style={{
+              position: 'absolute',
+              top: '52px',
+              left: 0,
+              right: 0,
+              borderRadius: 'var(--radius-md)',
+              boxShadow: '0 12px 30px rgba(0,0,0,0.6)',
+              zIndex: 90,
+              padding: '6px 0',
+              border: '1px solid var(--divider)',
+              maxHeight: '220px',
+              overflowY: 'auto'
+            }}
+          >
+            {suggestions.map((sug, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleSuggestionClick(sug)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  width: '100%',
+                  padding: '10px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '13.5px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s ease'
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <SearchIcon size={14} color="var(--text-muted)" />
+                {sug}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Filter Pills */}
-      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
-        {['all', 'songs', 'artists', 'playlists'].map(p => (
+      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+        {['all', 'songs', 'artists', 'playlists', 'tamil'].map(p => (
           <button
             key={p}
             onClick={() => setFilter(p)}
@@ -133,10 +228,11 @@ export default function Search({ setView, setViewParams, userPlaylists, refreshP
               fontWeight: '700',
               cursor: 'pointer',
               textTransform: 'capitalize',
-              transition: 'var(--transition)'
+              transition: 'var(--transition)',
+              flexShrink: 0
             }}
           >
-            {p}
+            {p === 'all' ? t('home') : p === 'tamil' ? 'தமிழ்' : p}
           </button>
         ))}
       </div>
@@ -168,7 +264,7 @@ export default function Search({ setView, setViewParams, userPlaylists, refreshP
                   Recent Searches
                 </h4>
                 <button onClick={handleClearRecent} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '11px', cursor: 'pointer' }}>
-                  Clear All
+                  {t('clearAll')}
                 </button>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
@@ -200,7 +296,7 @@ export default function Search({ setView, setViewParams, userPlaylists, refreshP
           <div>
             <h4 style={{ fontSize: '15px', color: 'white', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Flame size={16} color="var(--accent)" />
-              Trending Searches
+              {t('trendingTamil')}
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {trendingSearches.map((term, idx) => (
@@ -297,7 +393,8 @@ export default function Search({ setView, setViewParams, userPlaylists, refreshP
           })}
           {filteredResults.length === 0 && (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px 20px', fontSize: '14px' }}>
-              No results found for "{query}"
+              <div>{t('noResults')} "{query}"</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>{t('tryDifferent')}</div>
             </div>
           )}
         </div>

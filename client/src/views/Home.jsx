@@ -1,36 +1,45 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Pause, MoreVertical, Heart, Download, Share2, Plus, Disc, User, Search, AlignLeft } from 'lucide-react';
+import { Play, Pause, MoreVertical, Heart, Download, Share2, Search, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePlayback } from '../context/PlaybackContext';
 import { api } from '../services/api';
+import { getTranslation } from '../services/translations';
 
 export default function Home({ setView, setViewParams, userPlaylists, refreshPlaylists }) {
-  const { user } = useAuth();
+  const { user, language } = useAuth();
   const { 
     currentTrack, 
     isPlaying, 
     likedSongIds, 
     downloadedSongIds,
     playTrack, 
-    togglePlay, 
     playCollection, 
     addToQueue, 
     toggleLike, 
     downloadSong 
   } = usePlayback();
 
+  const t = (key) => getTranslation(language, key);
+
   const [featuredSongs, setFeaturedSongs] = useState([]);
   const [history, setHistory] = useState([]);
+  
+  // Tamil categories states
+  const [trendingTamil, setTrendingTamil] = useState([]);
+  const [tamilMelody, setTamilMelody] = useState([]);
+  const [tamilMass, setTamilMass] = useState([]);
+  const [tamilClassics, setTamilClassics] = useState([]);
+  
   const [activeMenuSong, setActiveMenuSong] = useState(null);
   const [showAddToPlaylistDropdown, setShowAddToPlaylistDropdown] = useState(false);
-  const [greeting, setGreeting] = useState('Good morning');
+  const [greeting, setGreeting] = useState('goodMorning');
 
   // Compute greeting dynamically based on local hours
   useEffect(() => {
     const hours = new Date().getHours();
-    if (hours < 12) setGreeting('Good morning');
-    else if (hours < 18) setGreeting('Good afternoon');
-    else setGreeting('Good evening');
+    if (hours < 12) setGreeting('goodMorning');
+    else if (hours < 18) setGreeting('goodAfternoon');
+    else setGreeting('goodEvening');
   }, []);
 
   // Fetch data
@@ -42,19 +51,26 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
         
         const historyRes = await api.getHistory();
         setHistory(historyRes.history || []);
+
+        // Load Tamil sections asynchronously
+        api.searchSongs('Trending Tamil Songs').then(res => setTrendingTamil(res.songs?.slice(0, 8) || []));
+        api.searchSongs('Tamil Melody Hit Songs').then(res => setTamilMelody(res.songs?.slice(0, 8) || []));
+        api.searchSongs('Tamil Mass BGM songs').then(res => setTamilMass(res.songs?.slice(0, 8) || []));
+        api.searchSongs('Classic Tamil Hit Songs').then(res => setTamilClassics(res.songs?.slice(0, 8) || []));
+
       } catch (err) {
         console.error('Failed to load home dashboard data', err);
       }
     }
     loadData();
-  }, [currentTrack]); // refresh if track changes
+  }, [currentTrack]);
 
-  // Seed default fallback artists
+  // Seed popular Tamil music composers
   const artists = [
-    { name: 'Astro Project', image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&h=300&q=80', description: 'Electronic / Ambient Space Beats' },
-    { name: 'Cosmo Beats', image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&h=300&q=80', description: 'Lo-Fi Nebula soundscapes' },
-    { name: 'Lofi Orbit', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&h=300&q=80', description: 'Relaxing galactic frequencies' },
-    { name: 'Interstellar Ensemble', image: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?auto=format&fit=crop&w=300&h=300&q=80', description: 'Symphonic orchestra and synthwave' }
+    { name: 'A.R. Rahman', image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=300&h=300&q=80', description: 'Isai Puyal / Mozart of Madras' },
+    { name: 'Anirudh Ravichander', image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=300&h=300&q=80', description: 'Rockstar of Kollywood' },
+    { name: 'Ilaiyaraaja', image: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?auto=format&fit=crop&w=300&h=300&q=80', description: 'Isaignani / Maestro' },
+    { name: 'Yuvan Shankar Raja', image: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=300&h=300&q=80', description: 'U1 / BGM King' }
   ];
 
   // Song Options Menu Actions
@@ -70,7 +86,6 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
 
   const handleMenuPlayNext = (e) => {
     e.stopPropagation();
-    // Insert song in queue after active index
     addToQueue(activeMenuSong);
     setActiveMenuSong(null);
     alert(`"${activeMenuSong.title}" added to queue.`);
@@ -98,7 +113,7 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
     });
   };
 
-  // Close menus
+  // Close menus on outside click
   useEffect(() => {
     const handleDocumentClick = () => {
       setActiveMenuSong(null);
@@ -108,13 +123,45 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
     return () => document.removeEventListener('click', handleDocumentClick);
   }, []);
 
+  const renderHorizontalSection = (title, songsList) => {
+    if (songsList.length === 0) return null;
+    return (
+      <section>
+        <h3 style={{ fontSize: '18px', color: 'white', marginBottom: '14px', fontWeight: '700' }}>{title}</h3>
+        <div className="scroll-x">
+          {songsList.map((song, idx) => (
+            <div 
+              key={`${song.id}-horiz-${idx}`}
+              className="card"
+              onClick={() => playTrack(song)}
+              style={{ width: '130px', flexShrink: 0, padding: '12px' }}
+            >
+              <div style={{ position: 'relative', width: '106px', height: '106px', marginBottom: '8px' }}>
+                <img src={song.artwork_url} alt={song.title} style={{ width: '100%', height: '100%', borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />
+                <div className="hover-play-overlay">
+                  <Play size={18} fill="white" color="white" />
+                </div>
+              </div>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {song.title}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                {song.artist}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
   return (
-    <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '32px', paddingBottom: '80px' }}>
       
       {/* 1. Header Row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: '800', tracking: '-0.02em', color: 'white' }}>
-          {greeting}, {user?.username || 'Astro'}
+        <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white' }}>
+          {t(greeting)}, {user?.username || 'Astro'}
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button onClick={() => setView('search')} className="btn-icon">
@@ -137,7 +184,7 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
         </div>
       </div>
 
-      {/* 2. Hero Section */}
+      {/* 2. Hero Banner */}
       <div 
         className="glass-panel" 
         style={{
@@ -163,13 +210,13 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
         }} />
         <div style={{ zIndex: 2, maxWidth: '280px' }}>
           <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.15em', color: 'var(--accent)', textTransform: 'uppercase' }}>
-            Featured Astro Release
+            {t('featuredTitle')}
           </span>
           <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'white', margin: '6px 0 10px 0', lineHeight: '1.2' }}>
-            Your Music Universe
+            {t('universeTitle')}
           </h1>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: '1.4' }}>
-            Discover something new in the galaxy of soundscapes. Start exploration now.
+            {t('universeSubtitle')}
           </p>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button 
@@ -177,26 +224,32 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
                 if (featuredSongs.length > 0) playCollection(featuredSongs, 0);
               }}
               className="btn btn-primary" 
-              style={{ padding: '10px 20px', fontSize: '13px' }}
+              style={{ padding: '10px 20px', fontSize: '13px', borderRadius: 'var(--radius-md)' }}
             >
               <Play size={14} fill="white" style={{ marginRight: '2px' }} />
-              Play Universe
+              {t('playUniverse')}
             </button>
             <button 
               onClick={() => setView('discover')}
               className="btn btn-secondary" 
-              style={{ padding: '10px 20px', fontSize: '13px' }}
+              style={{ padding: '10px 20px', fontSize: '13px', borderRadius: 'var(--radius-md)' }}
             >
-              Explore Genres
+              {t('exploreGenres')}
             </button>
           </div>
         </div>
       </div>
 
+      {/* Dynamic Tamil Sections */}
+      {renderHorizontalSection(t('trendingTamil'), trendingTamil)}
+      {renderHorizontalSection(t('tamilMelody'), tamilMelody)}
+      {renderHorizontalSection(t('tamilMass'), tamilMass)}
+      {renderHorizontalSection(t('tamilClassics'), tamilClassics)}
+
       {/* Recently Played */}
       {history.length > 0 && (
         <section>
-          <h3 style={{ fontSize: '18px', color: 'white', marginBottom: '14px', fontWeight: '700' }}>Recently Played</h3>
+          <h3 style={{ fontSize: '18px', color: 'white', marginBottom: '14px', fontWeight: '700' }}>{t('recentlyPlayed')}</h3>
           <div className="scroll-x">
             {history.slice(0, 8).map((song, idx) => (
               <div 
@@ -223,13 +276,12 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
         </section>
       )}
 
-      {/* Quick Picks (Featured Originals) */}
+      {/* Astro Originals Quick Picks */}
       <section>
-        <h3 style={{ fontSize: '18px', color: 'white', marginBottom: '14px', fontWeight: '700' }}>Quick Picks</h3>
+        <h3 style={{ fontSize: '18px', color: 'white', marginBottom: '14px', fontWeight: '700' }}>{t('quickPicks')}</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
           {featuredSongs.map((song) => {
             const isLiked = likedSongIds.has(song.id);
-            const isDownloaded = downloadedSongIds.has(song.id);
             return (
               <div 
                 key={song.id} 
@@ -288,13 +340,13 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
                       padding: '6px'
                     }}
                   >
-                    <button onClick={() => { playTrack(song); setActiveMenuSong(null); }} style={menuItemStyle}>Play</button>
-                    <button onClick={handleMenuPlayNext} style={menuItemStyle}>Add to queue</button>
+                    <button onClick={() => { playTrack(song); setActiveMenuSong(null); }} style={menuItemStyle}>{t('play')}</button>
+                    <button onClick={handleMenuPlayNext} style={menuItemStyle}>{t('addQueue')}</button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); setShowAddToPlaylistDropdown(!showAddToPlaylistDropdown); }} 
                       style={{ ...menuItemStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                     >
-                      Add to playlist {showAddToPlaylistDropdown ? '▼' : '►'}
+                      {t('addToPlaylist')} {showAddToPlaylistDropdown ? '▼' : '►'}
                     </button>
                     {showAddToPlaylistDropdown && (
                       <div style={{ paddingLeft: '8px', maxHeight: '100px', overflowY: 'auto', borderLeft: '2px solid var(--divider)', margin: '4px 0' }}>
@@ -305,8 +357,8 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
                         ))}
                       </div>
                     )}
-                    <button onClick={() => { downloadSong(song); setActiveMenuSong(null); }} style={menuItemStyle}>Download</button>
-                    <button onClick={handleMenuShare} style={menuItemStyle}>Share link</button>
+                    <button onClick={() => { downloadSong(song); setActiveMenuSong(null); }} style={menuItemStyle}>{t('download')}</button>
+                    <button onClick={handleMenuShare} style={menuItemStyle}>{t('shareLink')}</button>
                   </div>
                 )}
               </div>
@@ -317,13 +369,13 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
 
       {/* Recommended Artists */}
       <section>
-        <h3 style={{ fontSize: '18px', color: 'white', marginBottom: '14px', fontWeight: '700' }}>Recommended Artists</h3>
+        <h3 style={{ fontSize: '18px', color: 'white', marginBottom: '14px', fontWeight: '700' }}>{t('recommendedArtists')}</h3>
         <div className="scroll-x">
           {artists.map((artist, idx) => (
             <div 
               key={idx} 
               className="card"
-              onClick={() => { setView('artist'); setViewParams({ name: artist.name, image: artist.image }); }}
+              onClick={() => { setView('search'); setViewParams({ initialQuery: artist.name }); }}
               style={{ width: '130px', flexShrink: 0, padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
             >
               <img 
@@ -341,36 +393,6 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
           ))}
         </div>
       </section>
-
-      {/* Playlists */}
-      {userPlaylists.length > 0 && (
-        <section>
-          <h3 style={{ fontSize: '18px', color: 'white', marginBottom: '14px', fontWeight: '700' }}>Your Playlists</h3>
-          <div className="scroll-x">
-            {userPlaylists.map(pl => (
-              <div 
-                key={pl.id}
-                className="card"
-                onClick={() => { setView('playlist'); setViewParams({ id: pl.id }); }}
-                style={{ width: '130px', flexShrink: 0, padding: '12px' }}
-              >
-                <div style={{ position: 'relative', width: '106px', height: '106px', marginBottom: '8px' }}>
-                  <img src={pl.artwork} alt={pl.name} style={{ width: '100%', height: '100%', borderRadius: 'var(--radius-sm)', objectFit: 'cover' }} />
-                  <div className="hover-play-overlay">
-                    <Play size={18} fill="white" color="white" />
-                  </div>
-                </div>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {pl.name}
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
-                  {pl.song_count || 0} songs
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* CSS overlay utilities */}
       <style>{`

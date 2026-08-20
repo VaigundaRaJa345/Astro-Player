@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { Settings, User, Sliders, Play, Palette, ShieldAlert, Info } from 'lucide-react';
+import { Settings, User, Sliders, Palette, Info, Globe } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getTranslation } from '../services/translations';
 
 export default function SettingsView() {
-  const { user, settings, updateSettings, logout } = useAuth();
+  const { user, settings, updateSettings, language, changeLanguage } = useAuth();
   const [crossfade, setCrossfade] = useState(settings.playback_crossfade || 0);
+
+  const t = (key) => getTranslation(language, key);
 
   const handleCrossfadeChange = (e) => {
     const val = parseInt(e.target.value);
@@ -22,7 +25,6 @@ export default function SettingsView() {
 
   const handleThemeChange = (color) => {
     updateSettings({ theme_color: color });
-    // Dynamically update primary accent variables
     const colors = {
       blue: { primary: '#2563EB', accent: '#3B82F6', glow: 'rgba(59,130,246,0.35)' },
       purple: { primary: '#7C3AED', accent: '#A78BFA', glow: 'rgba(167,139,250,0.35)' },
@@ -43,12 +45,53 @@ export default function SettingsView() {
       <div>
         <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <Settings size={24} color="var(--accent)" />
-          Application Settings
+          {t('settings')}
         </h2>
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
           Configure playback, downloads, and themes
         </p>
       </div>
+
+      {/* Language settings */}
+      <section className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-lg)' }}>
+        <h3 style={{ fontSize: '15px', color: 'white', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--divider)', paddingBottom: '8px' }}>
+          <Globe size={16} color="var(--text-secondary)" />
+          {t('language')}
+        </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{t('selectLanguage')}</span>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => changeLanguage('en')}
+              className="btn"
+              style={{
+                backgroundColor: language === 'en' ? 'var(--primary)' : 'var(--bg-secondary)',
+                color: 'white',
+                border: language === 'en' ? 'none' : '1px solid var(--divider)',
+                padding: '8px 18px',
+                fontSize: '13px',
+                borderRadius: 'var(--radius-md)'
+              }}
+            >
+              English
+            </button>
+            <button
+              onClick={() => changeLanguage('ta')}
+              className="btn"
+              style={{
+                backgroundColor: language === 'ta' ? 'var(--primary)' : 'var(--bg-secondary)',
+                color: 'white',
+                border: language === 'ta' ? 'none' : '1px solid var(--divider)',
+                padding: '8px 18px',
+                fontSize: '13px',
+                borderRadius: 'var(--radius-md)'
+              }}
+            >
+              தமிழ் (Tamil)
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* Account Settings */}
       <section className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-lg)' }}>
@@ -78,7 +121,7 @@ export default function SettingsView() {
           
           {/* Crossfade slider */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', justify: 'space-between', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <span style={{ fontSize: '13px', fontWeight: '600', color: 'white' }}>Crossfade Transition</span>
               <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--accent)' }}>{crossfade} seconds</span>
             </div>
@@ -117,9 +160,9 @@ export default function SettingsView() {
       <section className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-lg)' }}>
         <h3 style={{ fontSize: '15px', color: 'white', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--divider)', paddingBottom: '8px' }}>
           <Palette size={16} color="var(--text-secondary)" />
-          Cosmic Theme
+          {t('cosmicTheme')}
         </h3>
-        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '12px' }}>Select Accent Color:</span>
+        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '12px' }}>{t('accentColor')}:</span>
         <div style={{ display: 'flex', gap: '14px' }}>
           {[
             { id: 'blue', color: '#3B82F6' },
@@ -150,18 +193,18 @@ export default function SettingsView() {
       <section className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-lg)' }}>
         <h3 style={{ fontSize: '15px', color: 'white', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--divider)', paddingBottom: '8px' }}>
           <Info size={16} color="var(--text-secondary)" />
-          About Astro Player
+          {t('aboutTitle')}
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-          <div>Version: <span style={{ color: 'white', fontWeight: '700' }}>v1.0.0 (Cosmic Edition)</span></div>
-          <div>Development environment: <span style={{ color: 'var(--accent)', fontWeight: '700' }}>Node.js / React / SQLite3</span></div>
+          <div>{t('versionLabel')}: <span style={{ color: 'white', fontWeight: '700' }}>v1.0.0 (Cosmic Edition)</span></div>
+          <div>{t('buildEnv')}: <span style={{ color: 'var(--accent)', fontWeight: '700' }}>Node.js / React / SQLite3</span></div>
           <div style={{ height: '1px', background: 'var(--divider)', margin: '6px 0' }} />
           <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--text-muted)' }}>
-            <a href="#" onClick={(e) => { e.preventDefault(); alert('Astro Player Terms of Service'); }}>Terms of Service</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); alert(t('terms')); }}>{t('terms')}</a>
             <span>•</span>
-            <a href="#" onClick={(e) => { e.preventDefault(); alert('Astro Player Privacy Policy'); }}>Privacy Policy</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); alert(t('privacy')); }}>{t('privacy')}</a>
             <span>•</span>
-            <a href="#" onClick={(e) => { e.preventDefault(); alert('MIT License. Developer: VaigundaRaJa345'); }}>Licenses</a>
+            <a href="#" onClick={(e) => { e.preventDefault(); alert(t('licenses')); }}>{t('licenses')}</a>
           </div>
         </div>
       </section>
