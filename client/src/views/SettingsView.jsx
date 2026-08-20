@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Settings, User, Sliders, Palette, Info, Globe } from 'lucide-react';
+import { Settings, User, Sliders, Palette, Info, Globe, Database } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getTranslation } from '../services/translations';
 
-export default function SettingsView() {
+export default function SettingsView({ setView }) {
   const { user, settings, updateSettings, language, changeLanguage } = useAuth();
   const [crossfade, setCrossfade] = useState(settings.playback_crossfade || 0);
 
@@ -90,6 +90,31 @@ export default function SettingsView() {
               தமிழ் (Tamil)
             </button>
           </div>
+        </div>
+      </section>
+
+      {/* Data & Cache */}
+      <section className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-lg)' }}>
+        <h3 style={{ fontSize: '15px', color: 'white', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--divider)', paddingBottom: '8px' }}>
+          <Database size={16} color="var(--text-secondary)" />
+          Data & Cache
+        </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+            Monitor YouTube API quota usage and manage your 7-day cached music catalog.
+          </span>
+          <button
+            onClick={() => setView('cache')}
+            className="btn btn-secondary"
+            style={{
+              padding: '10px 18px',
+              fontSize: '13px',
+              borderRadius: 'var(--radius-md)',
+              width: 'fit-content'
+            }}
+          >
+            Manage Cache & API Metrics
+          </button>
         </div>
       </section>
 

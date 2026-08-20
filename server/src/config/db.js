@@ -156,6 +156,29 @@ async function createTables() {
       wifi_only BOOLEAN DEFAULT 0,
       download_quality TEXT DEFAULT 'High',
       theme_color TEXT DEFAULT 'blue'
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS youtube_cache (
+      id TEXT PRIMARY KEY,
+      cache_key TEXT NOT NULL,
+      cache_type TEXT NOT NULL,
+      query TEXT,
+      youtube_video_id TEXT,
+      youtube_channel_id TEXT,
+      data TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      expires_at TIMESTAMP NOT NULL,
+      is_pinned BOOLEAN DEFAULT 0,
+      last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      access_count INTEGER DEFAULT 0
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS api_usage_logs (
+      id ${serialType},
+      request_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      query_or_id TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`
   ];
 
@@ -170,7 +193,10 @@ async function createTables() {
     'CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)',
     'CREATE INDEX IF NOT EXISTS idx_history_user ON listening_history(user_id)',
     'CREATE INDEX IF NOT EXISTS idx_playlist_songs_playlist ON playlist_songs(playlist_id)',
-    'CREATE INDEX IF NOT EXISTS idx_liked_songs_user ON liked_songs(user_id)'
+    'CREATE INDEX IF NOT EXISTS idx_liked_songs_user ON liked_songs(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_youtube_cache_key ON youtube_cache(cache_key)',
+    'CREATE INDEX IF NOT EXISTS idx_youtube_cache_expires ON youtube_cache(expires_at)',
+    'CREATE INDEX IF NOT EXISTS idx_api_usage_logs_created ON api_usage_logs(created_at)'
   ];
 
   for (const idxQ of indexes) {

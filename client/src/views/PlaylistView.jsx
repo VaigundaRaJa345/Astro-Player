@@ -50,6 +50,33 @@ export default function PlaylistView({ playlistId, setView, setViewParams, refre
     }
   };
 
+  const handleKeepPlaylistCached = async () => {
+    if (songs.length === 0) {
+      alert('Cannot cache an empty playlist.');
+      return;
+    }
+    if (!confirm(`Keep this playlist cached for 7 days?\n\n${songs.length} songs. Playlist metadata + song metadata will be cached to reduce YouTube API requests.`)) return;
+
+    try {
+      await api.keepCached(playlist.id, 'playlist', {
+        id: playlist.id,
+        title: playlist.name,
+        artwork: playlist.artwork,
+        description: playlist.description,
+        songs
+      });
+
+      // Loop and cache all songs within this playlist
+      const promises = songs.map(song => api.keepCached(song.id, 'song', song));
+      await Promise.all(promises);
+
+      alert(`✓ Playlist "${playlist.name}" cached for 7 days.`);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to cache playlist metadata.');
+    }
+  };
+
   const handleRemoveSong = async (e, songId) => {
     e.stopPropagation();
     try {
@@ -178,6 +205,15 @@ export default function PlaylistView({ playlistId, setView, setViewParams, refre
         >
           <Trash2 size={16} />
           Delete
+        </button>
+
+        <button 
+          onClick={handleKeepPlaylistCached}
+          className="btn btn-secondary"
+          style={{ color: 'var(--accent)', borderColor: 'rgba(59,130,246,0.2)' }}
+        >
+          <Music size={16} />
+          Keep Cached for 7 Days
         </button>
       </div>
 

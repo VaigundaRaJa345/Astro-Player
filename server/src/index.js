@@ -8,6 +8,8 @@ import authRoutes from './routes/auth.js';
 import songsRoutes from './routes/songs.js';
 import playlistRoutes from './routes/playlists.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
 
 const app = express();

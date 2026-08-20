@@ -12,16 +12,30 @@ import {
   removeDownload,
   getDownloads,
   clearDownloads,
-  searchSongs
+  searchSongs,
+  manualCacheItem,
+  removeCacheItem,
+  refreshCacheItem,
+  getCacheStats,
+  getCacheList,
+  getSearchSuggestions
 } from '../controllers/musicController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Search & Seeded tracks
+// Search, Seeded tracks & YouTube API Caching
 router.get('/search', authenticateToken, searchSongs);
+router.get('/suggestions', authenticateToken, getSearchSuggestions);
 router.get('/featured', authenticateToken, getFeatured);
 router.post('/sync', authenticateToken, syncSong);
+
+// Cache Management & API Metrics
+router.post('/cache-manual', authenticateToken, manualCacheItem);
+router.delete('/cache', authenticateToken, removeCacheItem);
+router.post('/cache-refresh', authenticateToken, refreshCacheItem);
+router.get('/cache-stats', authenticateToken, getCacheStats);
+router.get('/cache-list', authenticateToken, getCacheList);
 
 // Likes
 router.post('/like', authenticateToken, likeSong);

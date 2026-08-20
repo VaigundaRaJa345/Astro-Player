@@ -113,6 +113,17 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
     });
   };
 
+  const handleKeepCached = async (song) => {
+    setActiveMenuSong(null);
+    if (!confirm('Keep this song cached for 7 days? We\'ll keep the song\'s available metadata and discovery information cached to reduce API requests.')) return;
+    try {
+      await api.keepCached(song.id, 'song', song);
+      alert('✓ Cached for 7 days');
+    } catch (err) {
+      alert('Failed to cache song metadata.');
+    }
+  };
+
   // Close menus on outside click
   useEffect(() => {
     const handleDocumentClick = () => {
@@ -358,6 +369,7 @@ export default function Home({ setView, setViewParams, userPlaylists, refreshPla
                       </div>
                     )}
                     <button onClick={() => { downloadSong(song); setActiveMenuSong(null); }} style={menuItemStyle}>{t('download')}</button>
+                    <button onClick={() => handleKeepCached(song)} style={{ ...menuItemStyle, color: 'var(--accent)' }}>Keep Cached for 7 Days</button>
                     <button onClick={handleMenuShare} style={menuItemStyle}>{t('shareLink')}</button>
                   </div>
                 )}

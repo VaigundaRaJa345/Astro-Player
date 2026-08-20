@@ -16,6 +16,7 @@ import DownloadsView from './views/DownloadsView';
 import ProfileView from './views/ProfileView';
 import SettingsView from './views/SettingsView';
 import ArtistView from './views/ArtistView';
+import CacheView from './views/CacheView';
 
 // Layout Components
 import Sidebar from './components/Sidebar';
@@ -95,9 +96,11 @@ export default function App() {
       case 'profile':
         return <ProfileView />;
       case 'settings':
-        return <SettingsView />;
+        return <SettingsView setView={setView} />;
+      case 'cache':
+        return <CacheView setView={setView} />;
       case 'artist':
-        return <ArtistView artistName={viewParams.name} artistImage={viewParams.image} setView={navigateToView} />;
+        return <ArtistView artistName={viewParams.name} artistImage={viewParams.image} setView={setView} />;
       default:
         return <Home setView={navigateToView} setViewParams={setViewParams} userPlaylists={playlists} refreshPlaylists={loadPlaylists} />;
     }

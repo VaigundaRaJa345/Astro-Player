@@ -386,6 +386,104 @@ function handleOfflineFallback(endpoint, options) {
     };
   }
 
+  // Suggestions simulation
+  if (endpoint.startsWith('/songs/suggestions')) {
+    const urlParts = endpoint.split('?');
+    const q = urlParts.length > 1 ? new URLSearchParams(urlParts[1]).get('q') || '' : '';
+    const defaultSeeds = ['Hukum', 'Leo songs', 'Arabic Kuthu', 'Kaavaalaa', 'Munbe Vaa', 'Vaseegara', 'Enjoy Enjaami', 'Anirudh hits', 'A.R. Rahman', 'Ilaiyaraaja'];
+    const filtered = defaultSeeds.filter(term => term.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 5);
+    return { suggestions: filtered };
+  }
+
+  // Offline Cache support & Search simulation
+  if (endpoint.startsWith('/songs/search')) {
+    const urlParts = endpoint.split('?');
+    const q = urlParts.length > 1 ? new URLSearchParams(urlParts[1]).get('q') || '' : '';
+    const defaults = [
+      { id: 'astro_original_stellar', title: 'Stellar Drift', artist: 'Astro Project', album: 'Cosmic Horizons', artwork_url: 'https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?auto=format&fit=crop&w=400&h=400&q=80', duration: 165, source: 'astro', source_id: 'stellar_drift', playback_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+      { id: 'astro_original_nebula', title: 'Nebula Whispers', artist: 'Cosmo Beats', album: 'Cosmic Horizons', artwork_url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=400&h=400&q=80', duration: 218, source: 'astro', source_id: 'nebula_whispers', playback_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
+      { id: 'astro_original_pulsar', title: 'Pulsar Beats', artist: 'Lofi Orbit', album: 'Star Dust Lo-Fi', artwork_url: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?auto=format&fit=crop&w=400&h=400&q=80', duration: 302, source: 'astro', source_id: 'pulsar_beats', playback_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' }
+    ];
+    const filtered = defaults.filter(
+      s => s.title.toLowerCase().includes(q.toLowerCase()) || 
+           s.artist.toLowerCase().includes(q.toLowerCase())
+    );
+    return { songs: filtered };
+  }
+
+  if (endpoint === '/songs/cache-manual' && method === 'POST') {
+    const body = JSON.parse(options.body);
+    const mockCache = mockStore.get('youtube_cache', []);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    const newItem = {
+      id: body.id,
+      key: body.id,
+      type: body.type,
+      name: body.type === 'song' ? body.data.title : `Search: "${body.id}"`,
+      artist: body.type === 'song' ? body.data.artist : 'Offline Query',
+      songCount: body.type === 'song' ? 0 : 8,
+      expiresAt,
+      createdAt: new Date().toISOString(),
+      isPinned: true,
+      accessCount: 1,
+      data: JSON.stringify(body.data)
+    };
+
+    const updated = [newItem, ...mockCache.filter(item => item.id !== body.id)];
+    mockStore.set('youtube_cache', updated);
+    return { message: 'Cached for 7 days successfully', expires_at: expiresAt };
+  }
+
+  if (endpoint.startsWith('/songs/cache') && method === 'DELETE') {
+    const urlParts = endpoint.split('?');
+    const params = urlParts.length > 1 ? new URLSearchParams(urlParts[1]) : new URLSearchParams();
+    const id = params.get('id');
+    const clearAll = params.get('clearAll');
+
+    if (clearAll === 'true') {
+      mockStore.set('youtube_cache', []);
+      return { message: 'All cached YouTube metadata cleared successfully' };
+    } else if (id) {
+      const mockCache = mockStore.get('youtube_cache', []);
+      const updated = mockCache.filter(item => item.id !== id);
+      mockStore.set('youtube_cache', updated);
+      return { message: 'Cached item removed successfully' };
+    }
+  }
+
+  if (endpoint === '/songs/cache-refresh' && method === 'POST') {
+    const body = JSON.parse(options.body);
+    const mockCache = mockStore.get('youtube_cache', []);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    const updated = mockCache.map(item => {
+      if (item.id === body.id) {
+        return { ...item, expiresAt, accessCount: item.accessCount + 1 };
+      }
+      return item;
+    });
+    mockStore.set('youtube_cache', updated);
+    return { message: 'Cache refreshed successfully', expires_at: expiresAt };
+  }
+
+  if (endpoint === '/songs/cache-stats') {
+    const mockCache = mockStore.get('youtube_cache', []);
+    return {
+      totalCached: mockCache.length,
+      activeCached: mockCache.length,
+      expiringSoon: 0,
+      hitCount: 42,
+      missCount: 12,
+      hitRate: 78,
+      cacheSizeMB: Math.round((mockCache.length * 0.005) * 100) / 100 || 0.01
+    };
+  }
+
+  if (endpoint === '/songs/cache-list') {
+    return { items: mockStore.get('youtube_cache', []) };
+  }
+
   throw new Error(`Endpoint ${endpoint} not supported offline.`);
 }
 
@@ -405,9 +503,19 @@ export const api = {
   addSongToPlaylist: (playlistId, songId, songMetadata) => request(`/playlists/${playlistId}/songs`, { method: 'POST', body: JSON.stringify({ songId, song: songMetadata }) }),
   removeSongFromPlaylist: (playlistId, songId) => request(`/playlists/${playlistId}/songs/${songId}`, { method: 'DELETE' }),
 
-  // Music metadata syncing
+  // Music metadata syncing & Caching APIs
   syncSong: (song) => request('/songs/sync', { method: 'POST', body: JSON.stringify(song) }),
+  searchSongs: (q) => request(`/songs/search?q=${encodeURIComponent(q)}`),
+  getSearchSuggestions: (q) => request(`/songs/suggestions?q=${encodeURIComponent(q)}`),
   getFeatured: () => request('/songs/featured'),
+
+  // YouTube API Cache Management
+  keepCached: (id, type, data) => request('/songs/cache-manual', { method: 'POST', body: JSON.stringify({ id, type, data }) }),
+  removeCache: (id) => request(`/songs/cache?id=${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  clearAllCache: () => request('/songs/cache?clearAll=true', { method: 'DELETE' }),
+  refreshCache: (id, type) => request('/songs/cache-refresh', { method: 'POST', body: JSON.stringify({ id, type }) }),
+  getCacheStats: () => request('/songs/cache-stats'),
+  getCacheList: () => request('/songs/cache-list'),
 
   // Likes
   likeSong: (songId, songMetadata) => request('/songs/like', { method: 'POST', body: JSON.stringify({ songId, song: songMetadata }) }),
