@@ -84,6 +84,21 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const loginWithGoogle = async (credential) => {
+    setLoading(true);
+    try {
+      const res = await api.googleLogin(credential);
+      localStorage.setItem('astro_token', res.token);
+      setToken(res.token);
+      setUser(res.user);
+      await refreshProfile();
+      return res.user;
+    } catch (err) {
+      setLoading(false);
+      throw err;
+    }
+  };
+
   const register = async (username, email, password) => {
     setLoading(true);
     try {
@@ -134,6 +149,7 @@ export function AuthProvider({ children }) {
     language,
     changeLanguage,
     login,
+    loginWithGoogle,
     register,
     logout,
     updateSettings,

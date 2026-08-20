@@ -180,3 +180,83 @@ export async function updateSettings(req, res) {
     res.status(500).json({ error: 'Internal server error' });
   }
 }
+
+export async function googleLogin(req, res) {
+  const { credential } = req.body;
+
+  if (!credential) {
+    return res.status(400).json({ error: 'Google credential token is required' });
+  }
+
+  try {
+    // 1. Verify Google ID token by sending a request to Google TokenInfo API
+    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+    if (!response.ok) {
+      return res.status(400).json({ error: 'Invalid Google identity token' });
+    }
+
+    const payload = await response.json();
+    const { email, name } = payload;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Unable to retrieve email from Google Account' });
+    }
+
+    // 2. Check if user already exists
+    const userResult = await query('SELECT * FROM users WHERE email = $1', [email]);
+    let user;
+
+    if (userResult.rowCount > 0) {
+      user = userResult.rows[0];
+    } else {
+      // 3. User does not exist, auto-register them
+      const randomPassword = Math.random().toString(36).slice(-10);
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(randomPassword, salt);
+      const username = name || email.split('@')[0];
+
+      const insertResult = await query(
+        'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email',
+        [username, email, passwordHash]
+      );
+
+      let userId;
+      let registeredUser = {};
+
+      if (insertResult.rows && insertResult.rows.length > 0) {
+        userId = insertResult.rows[0].id;
+        registeredUser = insertResult.rows[0];
+      } else {
+        // Fallback SQLite last ID lookup
+        const lastIdCheck = await query('SELECT id, username, email FROM users WHERE email = $1', [email]);
+        userId = lastIdCheck.rows[0].id;
+        registeredUser = lastIdCheck.rows[0];
+      }
+
+      // Create default settings for new user
+      await query(
+        'INSERT INTO user_settings (user_id, playback_crossfade, wifi_only, download_quality, theme_color) VALUES ($1, $2, $3, $4, $5)',
+        [userId, 0, 0, 'High', 'blue']
+      );
+
+      user = { id: userId, username, email };
+    }
+
+    // 4. Generate JWT access token for Astro Player
+    const token = jwt.sign(
+      { id: user.id, username: user.username, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      message: 'Google login successful',
+      token,
+      user: { id: user.id, username: user.username, email: user.email }
+    });
+
+  } catch (err) {
+    console.error('Google login controller error:', err);
+    res.status(500).json({ error: 'Internal server error during Google Authentication' });
+  }
+}

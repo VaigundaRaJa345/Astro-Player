@@ -140,7 +140,7 @@ function handleOfflineFallback(endpoint, options) {
   }
 
   // Auth Login/Register
-  if (endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register')) {
+  if (endpoint.startsWith('/auth/login') || endpoint.startsWith('/auth/register') || endpoint.startsWith('/auth/google')) {
     const body = JSON.parse(options.body || '{}');
     const user = { id: 1, username: body.username || 'Astro Explorer', email: body.email };
     localStorage.setItem('astro_token', 'offline_mock_token');
@@ -491,6 +491,7 @@ export const api = {
   // Auth
   register: (username, email, password) => request('/auth/register', { method: 'POST', body: JSON.stringify({ username, email, password }) }),
   login: (email, password) => request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  googleLogin: (credential) => request('/auth/google', { method: 'POST', body: JSON.stringify({ credential }) }),
   getProfile: () => request('/auth/profile'),
   updateSettings: (settings) => request('/auth/settings', { method: 'PUT', body: JSON.stringify(settings) }),
 
