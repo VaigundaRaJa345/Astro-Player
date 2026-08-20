@@ -46,7 +46,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong on the server' });
 });
 
-// Start database and server
+// Start database and server (Local execution)
 async function startServer() {
   try {
     await initDb();
@@ -59,4 +59,13 @@ async function startServer() {
   }
 }
 
-startServer();
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  startServer();
+} else {
+  // On Vercel serverless runtime, initialize database async but do not listen to port
+  initDb().catch(err => {
+    console.error('Vercel serverless database initialization failed:', err);
+  });
+}
+
+export default app;

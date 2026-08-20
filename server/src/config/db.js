@@ -1,5 +1,4 @@
 import pg from 'pg';
-import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -9,6 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let dbType = 'sqlite'; // 'postgres' or 'sqlite'
 let pgPool = null;
 let sqliteDb = null;
+let sqliteMockDb = null; // Pure-JS fallback in-memory emulator
 
 // Initialize connection
 export async function initDb() {
@@ -27,21 +27,80 @@ export async function initDb() {
       console.log('Successfully connected to PostgreSQL database.');
     } catch (err) {
       console.error('PostgreSQL connection failed. Falling back to SQLite:', err.message);
-      setupSQLite();
+      await setupSQLite();
     }
   } else {
     console.log('No DATABASE_URL found. Initializing SQLite...');
-    setupSQLite();
+    await setupSQLite();
   }
 
   await createTables();
 }
 
-function setupSQLite() {
+async function setupSQLite() {
   dbType = 'sqlite';
-  const dbPath = path.resolve(__dirname, '../../astro_player.db');
-  console.log(`Using SQLite database at: ${dbPath}`);
-  sqliteDb = new sqlite3.Database(dbPath);
+  let dbPath;
+  if (process.env.VERCEL) {
+    dbPath = '/tmp/astro_player.db';
+    console.log(`Running on Vercel. Directing SQLite database to: ${dbPath}`);
+  } else {
+    dbPath = path.resolve(__dirname, '../../astro_player.db');
+    console.log(`Using local SQLite database at: ${dbPath}`);
+  }
+
+  try {
+    const sqlite3Module = await import('sqlite3');
+    const sqlite3 = sqlite3Module.default;
+    sqliteDb = new sqlite3.Database(dbPath);
+    console.log('SQLite database opened successfully.');
+  } catch (err) {
+    console.warn('Failed to load sqlite3 module. Initializing pure-JS in-memory cache emulator:', err.message);
+    
+    // Pure-JS database emulator for caching
+    const mockCacheMap = new Map();
+    sqliteMockDb = {
+      run(sql, params, callback) {
+        try {
+          if (sql.includes('INSERT INTO youtube_cache') || sql.includes('UPDATE youtube_cache')) {
+            // params: [id, cache_key, cache_type, data, expires_at, created_at, last_accessed_at, is_pinned]
+            const id = params[0];
+            mockCacheMap.set(id, params);
+          }
+          if (callback) callback(null);
+        } catch (e) {
+          if (callback) callback(e);
+        }
+      },
+      all(sql, params, callback) {
+        try {
+          if (sql.includes('SELECT * FROM youtube_cache WHERE id =')) {
+            const id = params[0];
+            const record = mockCacheMap.get(id);
+            if (record) {
+              const row = {
+                id: record[0],
+                cache_key: record[1],
+                cache_type: record[2],
+                query: record[3],
+                data: record[4],
+                expires_at: record[5],
+                created_at: record[6],
+                last_accessed_at: record[7],
+                is_pinned: record[8] || 0
+              };
+              return callback(null, [row]);
+            }
+          }
+          if (sql.includes('SELECT COUNT(*)')) {
+            return callback(null, [{ count: mockCacheMap.size }]);
+          }
+          callback(null, []);
+        } catch (e) {
+          callback(e);
+        }
+      }
+    };
+  }
 }
 
 // SQL helper to run queries with arguments
@@ -54,20 +113,34 @@ export function query(sql, params = []) {
     } else {
       // Convert Postgres placeholders ($1, $2...) to SQLite placeholders (?)
       const sqliteSql = sql.replace(/\$\d+/g, '?');
-      
-      // Select the correct run type based on the query keyword
       const isSelect = sqliteSql.trim().toUpperCase().startsWith('SELECT');
       
-      if (isSelect) {
-        sqliteDb.all(sqliteSql, params, (err, rows) => {
-          if (err) return reject(err);
-          resolve({ rows, rowCount: rows.length });
-        });
+      if (sqliteDb) {
+        if (isSelect) {
+          sqliteDb.all(sqliteSql, params, (err, rows) => {
+            if (err) return reject(err);
+            resolve({ rows, rowCount: rows.length });
+          });
+        } else {
+          sqliteDb.run(sqliteSql, params, function(err) {
+            if (err) return reject(err);
+            resolve({ rows: [], rowCount: this.changes || 0 });
+          });
+        }
+      } else if (sqliteMockDb) {
+        if (isSelect) {
+          sqliteMockDb.all(sqliteSql, params, (err, rows) => {
+            if (err) return reject(err);
+            resolve({ rows, rowCount: rows.length });
+          });
+        } else {
+          sqliteMockDb.run(sqliteSql, params, (err) => {
+            if (err) return reject(err);
+            resolve({ rows: [], rowCount: 1 });
+          });
+        }
       } else {
-        sqliteDb.run(sqliteSql, params, function(err) {
-          if (err) return reject(err);
-          resolve({ rows: [], rowCount: this.changes });
-        });
+        reject(new Error('No active database connection available'));
       }
     }
   });
